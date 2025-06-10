@@ -1,0 +1,238 @@
+from models import  Hike, Hiker, Review
+from flask import request, make_response, Flask, jsonify, session
+from flask_restful import Resource
+from flask_migrate import Migrate
+from config import app, db, api
+from sqlalchemy.exc import IntegrityError
+
+
+class Hikers(Resource):
+    def get(self):
+        hikers = [h.to_dict(rules=('-reviews', )) for h in Hiker.query.all()]
+        return make_response(hikers, 200)
+    
+    def post(self):
+        req_data = request.get_json()
+        try:
+            hiker = Hiker(**req_data) # type: ignore
+            db.session.add(hiker)
+            db.session.commit()
+            return make_response(hiker.to_dict(), 201)
+        except ValueError as e:
+            return make_response({"error": str(e)}, 400)
+        
+class HikersById(Resource):
+    def get(self, id):
+        try:
+            hiker = Hiker.query.filter(Hiker.id == id).first()
+            if not hiker:
+                return make_response({"error": "Hiker not found"}, 404)
+            return make_response(hiker.to_dict(), 200)
+        except Exception as e:
+            return make_response({"error": str(e)}, 500)
+        
+    def delete(self, id):
+        hiker = Hiker.query.filter(Hiker.id == id).first()
+        if not hiker:
+            return make_response({"error": "Hiker not found"}, 404)
+        db.session.delete(hiker)
+        db.session.commit()
+        return make_response({}, 204)
+    
+    def patch(self, id):
+        hiker = Hiker.query.filter(Hiker.id == id).first()
+        if not hiker:
+            return make_response({"error": "Hiker not found"}, 404)
+        fields = request.get_json()
+        try:
+            for field, value in fields.items(): # type: ignore
+                setattr(hiker, field, value)
+            db.session.commit()
+            return make_response(hiker.to_dict(), 202)
+        except Exception as e:
+            return make_response({"error": str(e)}, 500)
+        
+class Hikes(Resource):
+    def get(self):
+        hikes = [hi.to_dict( rules=('-reviews',) ) for hi in Hike.query.all()]
+        return make_response(hikes, 200)
+    
+    def post(self):
+        try:
+            data = request.get_json()
+            new_hike = Hike(
+                name=data['name'], # type: ignore
+                city=data['city'], # type: ignore
+                state=data['state'], # type: ignore
+                length=int(data['length']), # type: ignore
+                difficulty=int(data['difficulty']) # type: ignore
+            )
+            db.session.add(new_hike)
+            db.session.commit()
+            return make_response(new_hike.to_dict(), 201)
+        except (KeyError, TypeError, ValueError) as e:
+            db.session.rollback()
+            return make_response({"error": str(e)}, 400)
+
+class HikesById(Resource):
+    def get(self, id):
+        try:
+            hike = Hike.query.filter(Hike.id == id).first()
+            if not hike:
+                return make_response({'error': 'Hike not found'}, 404)
+            else: 
+                return make_response(hike.to_dict(), 200) 
+        except Exception as e:
+            return make_response({'error': str(e)}, 500)
+        
+    def delete(self, id):
+        hike = Hike.query.filter(Hike.id == id).first()
+        if not hike:
+            return make_response({'error': 'Hike not found'}, 404)
+        db.session.delete(hike)
+        db.session.commit()
+        return make_response({}, 204)
+    
+    def patch(self, id):
+        hike = Hike.query.filter(Hike.id == id).first()
+        if not hike:
+            return make_response({"error": "Hike not found"}, 404)
+        fields = request.get_json()
+        try:
+            for field, value in fields.items(): # type: ignore
+                setattr(hike, field, value)
+            db.session.commit()
+            return make_response(hike.to_dict(), 202)
+        except Exception as e:
+            return make_response({"error": str(e)}, 500)
+        
+class Reviews(Resource):
+    def post(self):
+        req_data = request.get_json()
+        try:
+            review = Review(**req_data) # type: ignore
+            db.session.add(review)
+            db.session.commit()
+            return make_response(review.to_dict(), 201)
+        except Exception as e:
+            return make_response({'error': str(e)}, 400)
+        
+class ReviewsByHikerId(Resource):
+    def get(self, id):
+        hike = Hike.query.get(id)
+        if not hike:
+            return {"error": "Hike not found"}, 404
+
+        hiker_dict = {}
+
+        for review in hike.reviews:
+            hiker = review.hiker
+            if hiker.id not in hiker_dict:
+                hiker_dict[hiker.id] = hiker.to_dict(rules=('-reviews',))
+                hiker_dict[hiker.id]['reviews'] = []
+            hiker_dict[hiker.id]['reviews'].append(review.to_dict(rules=('-hiker', '-hike')))
+
+        return list(hiker_dict.values()), 200
+        
+class Signup(Resource):
+    def post(self):
+        data = request.get_json()
+
+        if data.get("password") != data.get("password_confirmation"): # type: ignore
+            return {"error": "Password confirmation does not match password"}, 400
+        
+        try:
+            hiker = Hiker(
+                username = data["username"], # type: ignore
+                password = data.get("password"), # type: ignore
+                name = data.get("name"), # type: ignore
+                city = data.get("city"), # type: ignore
+                state = data.get("state") # type: ignore
+            )
+            db.session.add(hiker)
+            db.session.commit()
+            session['hiker_id'] = hiker.id
+            return {
+                'id': hiker.id,
+                'username': hiker.username,
+                'name': hiker.name,
+                'city': hiker.city,
+                'state': hiker.state
+            }, 201
+
+        except (KeyError, ValueError, IntegrityError) as e:
+            db.session.rollback()
+            return {"error": f"Invalid signup: {str(e)}"}, 422
+
+class CheckSession(Resource):
+    def get(self):
+        hiker_id = session.get('hiker_id')
+        if hiker_id:
+            hiker = Hiker.query.get(hiker_id)
+            if hiker:
+                return {
+                    'id': hiker.id,
+                    'username': hiker.username,
+                    'name': hiker.name,
+                    'city': hiker.city,
+                    'state': hiker.state
+                }, 200
+        return {'error': "Unauthorized"}, 401
+
+class Login(Resource):
+    def post(self):
+        data = request.get_json()
+
+        if not data or 'username' not in data or 'password' not in data:
+            return {'error': 'Missing username or password'}, 400
+
+        hiker = Hiker.query.filter_by(username=data['username']).first()
+
+        if hiker and hiker.authenticate(data['password']):
+            session['hiker_id'] = hiker.id
+            return {
+                'id': hiker.id,
+                'username': hiker.username,
+                'name': hiker.name,
+                'city': hiker.city,
+                'state': hiker.state
+            }, 200
+        else:
+            return {'error': 'Invalid username or password'}, 401
+
+class Logout(Resource):
+    def delete(self):
+        hiker_id = session.get('hiker_id')
+        if hiker_id:
+            session.pop('hiker_id', None)
+            return {}, 204
+        else:
+            return {'error': 'Not logged in'}, 401 
+        
+class ClearSession(Resource):
+
+    def delete(self):
+    
+        session['page_views'] = None
+        session['user_id'] = None
+
+        return {}, 204
+
+api.add_resource(Reviews, '/reviews')
+api.add_resource(ReviewsByHikerId, '/hikes/<int:id>/reviews')
+api.add_resource(HikesById, '/hikes/<int:id>')
+api.add_resource(HikersById, '/hikers/<int:id>')    
+api.add_resource(Hikers, '/hikers')
+api.add_resource(Hikes, '/hikes')
+api.add_resource(Signup, '/signup', endpoint='signup')
+api.add_resource(CheckSession, '/check_session', endpoint='check_session')
+api.add_resource(Login, '/login', endpoint='login')
+api.add_resource(Logout, '/logout', endpoint='logout')
+api.add_resource(ClearSession, '/clear', endpoint='clear')
+
+@app.route('/')
+def index():
+    return '<h1>HikeFinder Backend</h1>'
+
+if __name__ == '__main__':
+    app.run(port=5555, debug=True)
