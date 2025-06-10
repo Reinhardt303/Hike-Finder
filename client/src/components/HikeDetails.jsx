@@ -62,7 +62,7 @@ function HikeDetails() {
       city: Yup.string().required("Required"),
       state: Yup.string().required("Required"),
       length: Yup.number().required("Required").positive("Must be positive").typeError("Must be a number"),
-      difficulty: Yup.number().required("Required").min(1).max(5).typeError("Must be a number"),
+      difficulty: Yup.number().required("Required").min(1).max(5).typeError("Must be a number between 1 and 5"),
     }),
     onSubmit: (values) => {
       fetch(`/hikes/${id}`, {
@@ -74,7 +74,7 @@ function HikeDetails() {
           difficulty: Number(values.difficulty),
         }),
       })
-              .then((r) => {
+        .then((r) => {
           if (!r.ok) throw new Error("Failed to update hike");
           return r.json();
         })

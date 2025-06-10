@@ -43,10 +43,11 @@ class HikersById(Resource):
         hiker = Hiker.query.filter(Hiker.id == id).first()
         if not hiker:
             return make_response({"error": "Hiker not found"}, 404)
-        fields = request.get_json()
+        req_json = request.get_json()
         try:
-            for field, value in fields.items(): # type: ignore
-                setattr(hiker, field, value)
+            for key, value in req_json.items(): # type: ignore
+                setattr(hiker, key, value)
+            db.session.add(hiker)
             db.session.commit()
             return make_response(hiker.to_dict(), 202)
         except Exception as e:
@@ -59,20 +60,19 @@ class Hikes(Resource):
     
     def post(self):
         try:
-            data = request.get_json()
+            req_json = request.get_json()
             new_hike = Hike(
-                name=data['name'], # type: ignore
-                city=data['city'], # type: ignore
-                state=data['state'], # type: ignore
-                length=int(data['length']), # type: ignore
-                difficulty=int(data['difficulty']) # type: ignore
+                name=req_json['name'], # type: ignore
+                city=req_json['city'], # type: ignore
+                state=req_json['state'], # type: ignore
+                length=int(req_json['length']), # type: ignore
+                difficulty=int(req_json['difficulty']) # type: ignore
             )
             db.session.add(new_hike)
             db.session.commit()
             return make_response(new_hike.to_dict(), 201)
-        except (KeyError, TypeError, ValueError) as e:
-            db.session.rollback()
-            return make_response({"error": str(e)}, 400)
+        except Exception as e:
+            return make_response({'error': str(e)}, 400)
 
 class HikesById(Resource):
     def get(self, id):
@@ -97,10 +97,11 @@ class HikesById(Resource):
         hike = Hike.query.filter(Hike.id == id).first()
         if not hike:
             return make_response({"error": "Hike not found"}, 404)
-        fields = request.get_json()
+        req_json = request.get_json()
         try:
-            for field, value in fields.items(): # type: ignore
-                setattr(hike, field, value)
+            for key, value in req_json.items(): # type: ignore
+                setattr(hike, key, value)
+            db.session.add(hike)
             db.session.commit()
             return make_response(hike.to_dict(), 202)
         except Exception as e:
@@ -108,9 +109,9 @@ class HikesById(Resource):
         
 class Reviews(Resource):
     def post(self):
-        req_data = request.get_json()
+        req_json = request.get_json()
         try:
-            review = Review(**req_data) # type: ignore
+            review = Review(**req_json) # type: ignore
             db.session.add(review)
             db.session.commit()
             return make_response(review.to_dict(), 201)
@@ -136,18 +137,18 @@ class ReviewsByHikerId(Resource):
         
 class Signup(Resource):
     def post(self):
-        data = request.get_json()
+        req_json = request.get_json()
 
-        if data.get("password") != data.get("password_confirmation"): # type: ignore
+        if req_json.get("password") != req_json.get("password_confirmation"): # type: ignore
             return {"error": "Password confirmation does not match password"}, 400
         
         try:
             hiker = Hiker(
-                username = data["username"], # type: ignore
-                password = data.get("password"), # type: ignore
-                name = data.get("name"), # type: ignore
-                city = data.get("city"), # type: ignore
-                state = data.get("state") # type: ignore
+                username = req_json["username"], # type: ignore
+                password = req_json.get("password"), # type: ignore
+                name = req_json.get("name"), # type: ignore
+                city = req_json.get("city"), # type: ignore
+                state = req_json.get("state") # type: ignore
             )
             db.session.add(hiker)
             db.session.commit()
@@ -181,14 +182,14 @@ class CheckSession(Resource):
 
 class Login(Resource):
     def post(self):
-        data = request.get_json()
+        req_json = request.get_json()
 
-        if not data or 'username' not in data or 'password' not in data:
+        if not req_json or 'username' not in req_json or 'password' not in req_json:
             return {'error': 'Missing username or password'}, 400
 
-        hiker = Hiker.query.filter_by(username=data['username']).first()
+        hiker = Hiker.query.filter_by(username=req_json['username']).first()
 
-        if hiker and hiker.authenticate(data['password']):
+        if hiker and hiker.authenticate(req_json['password']):
             session['hiker_id'] = hiker.id
             return {
                 'id': hiker.id,
@@ -220,10 +221,10 @@ class ClearSession(Resource):
 
 api.add_resource(Reviews, '/reviews')
 api.add_resource(ReviewsByHikerId, '/hikes/<int:id>/reviews')
-api.add_resource(HikesById, '/hikes/<int:id>')
-api.add_resource(HikersById, '/hikers/<int:id>')    
-api.add_resource(Hikers, '/hikers')
 api.add_resource(Hikes, '/hikes')
+api.add_resource(HikesById, '/hikes/<int:id>')
+api.add_resource(Hikers, '/hikers')
+api.add_resource(HikersById, '/hikers/<int:id>')    
 api.add_resource(Signup, '/signup', endpoint='signup')
 api.add_resource(CheckSession, '/check_session', endpoint='check_session')
 api.add_resource(Login, '/login', endpoint='login')
