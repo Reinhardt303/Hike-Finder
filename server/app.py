@@ -118,22 +118,22 @@ class Reviews(Resource):
         except Exception as e:
             return make_response({'error': str(e)}, 400)
         
-class ReviewsByHikerId(Resource):
+class ReviewsByHikesHiker(Resource): 
     def get(self, id):
         hike = Hike.query.get(id)
         if not hike:
             return {"error": "Hike not found"}, 404
 
-        hiker_dict = {}
+        hike_dict = {} #hike dict
 
         for review in hike.reviews:
             hiker = review.hiker
-            if hiker.id not in hiker_dict:
-                hiker_dict[hiker.id] = hiker.to_dict(rules=('-reviews',))
-                hiker_dict[hiker.id]['reviews'] = []
-            hiker_dict[hiker.id]['reviews'].append(review.to_dict(rules=('-hiker', '-hike')))
+            if hiker.id not in hike_dict:
+                hike_dict[hiker.id] = hiker.to_dict(rules=('-reviews',))
+                hike_dict[hiker.id]['reviews'] = []
+            hike_dict[hiker.id]['reviews'].append(review.to_dict(rules=('-hiker', '-hike')))
 
-        return list(hiker_dict.values()), 200
+        return list(hike_dict.values()), 200
         
 class Signup(Resource):
     def post(self):
@@ -220,7 +220,7 @@ class ClearSession(Resource):
         return {}, 204
 
 api.add_resource(Reviews, '/reviews')
-api.add_resource(ReviewsByHikerId, '/hikes/<int:id>/reviews')
+api.add_resource(ReviewsByHikesHiker, '/hikes/<int:id>/reviews')
 api.add_resource(Hikes, '/hikes')
 api.add_resource(HikesById, '/hikes/<int:id>')
 api.add_resource(Hikers, '/hikers')
@@ -234,6 +234,26 @@ api.add_resource(ClearSession, '/clear', endpoint='clear')
 @app.route('/')
 def index():
     return '<h1>HikeFinder Backend</h1>'
+
+""" @app.route('/hikes/<int:id>/reviews')
+def hike_reviews(id):
+    hike = Hike.query.get(id)
+    if not hike:
+        return jsonify({"error": "Hike not found"}), 404
+
+    return jsonify([
+        {
+            "review_text": review.review_text,
+            "hiker": {
+                "id": review.hiker.id,
+                "name": review.hiker.name,
+                "username": review.hiker.username,
+            }
+        }
+        for hiker in hike.hikers
+        for review in hiker.reviews
+        if review.hike_id == hike.id
+    ]) """
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
